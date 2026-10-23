@@ -1,4 +1,4 @@
-# Drafters vs Workload Demons — office-horror theme + offline sandbox v1.1
+# Drafters vs Workload Demons — party ledger, role dashboards + offline sandbox v1.2
 
 A browser deduction game for 30 players plus one human Game Master. English only, with a retro drafting-office interface, private rooms, live text chats, secret role actions, and text announcements. Desktop first; a narrow layout is included, but phone usability still needs testing.
 
@@ -12,6 +12,8 @@ A browser deduction game for 30 players plus one human Game Master. English only
 6. Continue into discussion, trial, and another night using the normal GM controls.
 
 No Node.js, internet, installation, terminal, or hosted server is required for this demo. Both supplied pictures, CSS, JavaScript, and the real rules engine are embedded in the HTML file. You can copy this single file anywhere. It simulates 16 players locally; it is not live multiplayer. Role switching is deliberately available only in this sandbox.
+
+The demo also has **Simulate unread messages** to test the two orange chat indicators. General and demon messages are separate, and a player only sees permitted channels.
 
 The demo remembers progress in browser storage when the browser permits it. Use Export/Import demo save if file-based storage is restricted. Reset creates a new sandbox. Detached chat/public windows require browser popups to be allowed. Private role text is hidden by default. Real multiplayer still runs through the Node.js server with permissions enforced.
 
@@ -30,7 +32,7 @@ The visual theme now uses your Draftersville entrance and Drafters-versus-Demons
 Mac/Linux or terminal equivalent:
 
 ```sh
-cd drafters-game
+# Open a terminal in the extracted project folder.
 npm start
 ```
 
@@ -44,35 +46,32 @@ For a test on the same trusted local network, teammates can visit http://YOUR-CO
 
 For normal remote play, deploy the project to an HTTPS hosting service. Everyone then uses the same hosted URL, enters a room nickname, and joins with the room code. Only the person hosting needs Node.js; players just need a browser. No purchased domain is necessary.
 
-## First test game
+## First test game and updated controls
 
-1. Start as Darius and create a room.
-2. Open another browser profile or private window and join. Repeat for at least four players. Each player must have their own browser profile/session.
-3. In the GM rules board, lower special-role counts to fit the actual number of players. The default has 12 special roles. Use four attacking demons for a larger group; experiment with balance for smaller games.
-4. Save the rules, then assign secret roles and start night.
-5. Players reveal their own role when desired. Role text is hidden by default. Private chats and action controls can still identify roles: share only the public presentation window.
-6. Guard, Doctor and Priest choose actions. Analyst may investigate once during the night; GM sends the truthful yes/no response. Demons vote for one target (or two on the bonus night).
-7. GM locks demon votes. Missing votes or ties can be resolved with the GM target override. Protection/poison choices close at this point. Succubus can now ask its once-nightly question. GM answers remaining investigations.
-8. GM resolves the night privately, handles any Enforcer final action, then releases announcements.
-9. During the day, discuss publicly. GM nominates one living player for trial. Living players vote execute, spare, or abstain. GM resolves and releases the result.
-10. Begin the next night. Continue until a team wins. Create a new room to play another game.
+1. Create a room as Darius. Join from another browser profile/private window for each player. At least four players are needed; the default 12 special roles must be reduced for a smaller test.
+2. In the lobby, save role counts, timers, Priest targeting, tie behavior, and the new **Automatically publish special-role success notices** checkbox. It is **off by default**.
+3. Assign roles and begin night. The main view is now the **Party Night Log** spreadsheet. It shows employee status, current public nomination/trial votes, previous public voting rounds, and revealed roles in the right-hand column. Dead ghosts keep their revealed role visible.
+4. General and Demons are the only chats. A dark-orange button and unread count signal messages not yet read. Demons chat is available only to living demons and GM. The chat panel opens when its button is clicked; close it to prioritize the table.
+5. Special-role players use **Your Desk → Private role action dashboard**. Save a selection, review the draft, then **Lock in actions**. The GM receives only the locked submission. Saved drafts cannot protect, poison, or investigate. Locks are final for the night. Choose **Skip this window** to submit no action.
+6. Analyst, Doctor, Guard, and Priest act before the GM locks demon voting. The Succubus window opens after that lock; it receives a fresh night-length timer. Expired windows reject saves and locks on the server. Priest can save both a protection target and a redirection target before locking the combined selection.
+7. Investigations deliver a private **Yes/No** in the acting player's dashboard immediately after lock-in, with a private result history. No chat or public bulletin receives that answer. The GM can inspect the locked selection and answer.
+8. GM resolves the night privately. Review deaths/protections and any pending Enforcer action. Private protection outcome details remain held until GM releases the outcomes to the notice board.
+9. With automatic success notices checked, successful role tasks are posted on the notice board after the GM releases outcomes. With it unchecked, they stay in the GM dashboard until GM clicks **Reveal on notice board**. These menacing notices name the role/task, never the acting or investigated player. Secret Burned-Out conversions are never auto-announced publicly.
+10. During discussion, living players can choose a public nomination. The table shows who nominated whom. GM chooses the final accused and opens trial voting. Execute, spare, and abstain votes are shown against that accused. One trial per day; nominations and final ballots are preserved in the table's Shift columns.
+11. Begin the next night. Night demon targets never enter the public history. Only demons and GM see the secret target-vote column; everyone else sees **Sealed**.
 
-Timers count down but never automatically announce deaths or advance phases: the GM stays in control. Zero seconds means unlimited. A tied trial acquits by default; the lobby can change this to GM decision. One trial per day. Missing votes are not counted as execute or spare.
+Timers require the GM to advance phases and announce results. Zero means unlimited. Unsubmitted roles skip their optional action when the GM closes their window; Guard's automatic self-protection still applies. Start a new room for another game.
 
-## Privacy, chats, and screen sharing
+## Privacy, chats, notices and screen sharing
 
-- Public chat is read-only at night. Private role chats stay open.
-- Demons share a team channel and can see their team's votes. Succubus has only its GM channel and does not join demon attacks or demon chat.
-- Each special-role player has an individual private channel with GM.
-- The GM sees every chat in dashboard channel tabs and every submitted action.
-- **Open public presentation** creates a separate window that receives only public information. Share that window, not the entire desktop.
-- **Hide all secrets** switches the GM dashboard to a public projection and removes private data from its displayed state. Returning restores the private dashboard.
-- **Detach chat** opens a movable browser window. It opens on General chat; switching to a private tab deliberately displays confidential information. Keep it off a shared screen.
-- The server checks permissions on every action/chat and sends only authorized state to each client. Secret roles are not simply hidden with CSS.
-- During GM outcome review, public player status stays at its pre-resolution values. Conversion and death announcements are released together by GM. An Enforcer receives their private final-action prompt before public release.
-- Ghost places are offered to eligible dead players, first five who accept. They can write public chat, cannot vote, and must not reveal secrets. Analyst and evil roles cannot become ghosts. Other dead players can read public chat and spectate; their private channels and actions are disabled.
-- Refreshing reconnects using the browser's private token. **Save reconnect key** downloads a private text file for recovery on another browser. Never share this file: it grants access to your role/session.
-- The public presentation link exposes the room's public roster and announcements to anyone who has the link. Room codes and reconnect keys are intended for your trusted team, not a public competitive service.
+- General and Demons are the only chat channels. The old player-ID/GM chat tabs have been removed from the interface **and denied by the server**.
+- System events, deaths, Cat saves, ghost arrivals and GM announcements appear on the pinned **Office Notice Board**, not as chat messages.
+- No role drafts, answers, private result history, successes awaiting release, Cat ownership or unused ability counts are sent to other players or the public presentation.
+- The GM's table reveals all roles and includes a private resources strip. **Share only the separate public presentation window**, which receives public data only. Hide all secrets switches the GM screen to that projection.
+- Public chat is read-only at night; private demon chat stays available. Dead spectators can read public chat but cannot write; eligible ghosts can write but cannot vote or reveal secrets.
+- Unread chat receipts are tracked separately for each room, player and channel. An open, focused chat at the bottom marks arriving messages read; a closed/background chat keeps the orange unread indicator.
+- Refreshing reconnects using the browser token. Reconnect-key files grant role/session access: keep them private.
+- Old saved rooms are migrated on access: private player channels are removed, old system messages become board notices, and existing submitted role selections remain locked. Test with a new room when changing versions; do not update the service mid-game.
 
 ## Agreed role rules implemented
 
@@ -96,7 +95,7 @@ Unique special roles have counts of 0 or 1; demon variants can have multiple cop
 
 This is a runnable server project, not a single static HTML page. Choose **Web Service**, not Static Site.
 
-1. Create a private GitHub repository. Upload the contents of `drafters-game` so `package.json`, `server.js`, and `public` are at the repository root. Do not upload `data` or reconnect keys.
+1. Create a private GitHub repository. The v1.2 deployment ZIP has no extra enclosing folder. Upload **all files and subfolders**, including `public/assets`, so `package.json`, `server.js`, and `public` are at the repository root. Do not upload `data` or reconnect keys.
 2. In https://dashboard.render.com/ choose **New → Web Service** and connect the repository.
 3. Select the Node runtime and a region near your team.
 4. Set **Build Command** to `npm test` and **Start Command** to `npm start`.
@@ -129,7 +128,7 @@ docker run --rm -p 3000:3000 -v drafters-data:/app/data drafters-game
 
 ## Media placeholders
 
-All events currently use text. `public/media.js` contains the future event mapping placeholders. Public announcements contain `media: null`. When we coordinate actual assets, add the trigger, file, audience, and whether GM releases it. Confidential videos/images need authenticated delivery, not public files whose filenames spoil roles. No media files or upload feature are included in this version.
+All events currently use text. `public/media.js` contains the future event mapping placeholders. Public announcements contain `media: null`. When we coordinate actual assets, add the trigger, file, audience, and whether GM releases it. Confidential videos/images need authenticated delivery, not public files whose filenames spoil roles. The two theme images are included. Role-event media remain text placeholders; no media upload feature is included.
 
 ## Project files
 
@@ -144,8 +143,8 @@ All events currently use text. `public/media.js` contains the future event mappi
 
 ## Validation and current limits
 
-Run `npm test`. The included checks cover 30-player joining, GM permissions, private chat access, investigation rules, conversion, protection priority, consumable limits, ghost permissions, outcome release, win conditions, live event delivery, reconnecting, concurrent joining, and SQLite recovery after restart.
+Run `npm test`. The included checks cover locked/draft role separation, private responses, optional success notices, readable chat labels, unread indicators, public voting history and night secrecy, plus 30-player joining, GM permissions, private chat access, investigation rules, conversion, protection priority, consumable limits, ghost permissions, outcome release, win conditions, live event delivery, reconnecting, concurrent joining, and SQLite recovery after restart.
 
-A real visual browser test could not run in the build environment because no browser executable was available and the browser download was blocked. Start with a small team test to check layout, detached windows, and screen sharing. Voice chat is not built in; use your existing team call alongside text chat. There is no deployment/account connection yet: the ZIP is ready to host, but no public server has been created.
+A real visual browser test has not run. Automated interface checks validate generated markup and code paths, not pixel layout. Start with a small team test to check layout, detached windows, and screen sharing. Voice chat is not built in; use your existing team call alongside text chat. There is no deployment/account connection yet: the ZIP is ready to host, but no public server has been created.
 
 The prototype has no room deletion, player removal, late joining, GM transfer, replay-in-place, or outcome undo. Reconnect works with the original browser token/key. Timers retain absolute deadlines over restart, so an elapsed timer is shown as time up; GM decides when to advance. Keep the database private. Back it up while the server is stopped, including SQLite sidecar files if they remain.
