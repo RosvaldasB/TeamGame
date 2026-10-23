@@ -1,8 +1,23 @@
-# Drafters vs Workload Demons — playable prototype v1.0
+# Drafters vs Workload Demons — office-horror theme + offline sandbox v1.1
 
 A browser deduction game for 30 players plus one human Game Master. English only, with a retro drafting-office interface, private rooms, live text chats, secret role actions, and text announcements. Desktop first; a narrow layout is included, but phone usability still needs testing.
 
-## Run on Windows
+## Open without Node.js (recommended for your company PC)
+
+1. Extract the ZIP.
+2. Double-click **OFFLINE_DEMO.html**, or right-click → Open with → Chrome/Edge.
+3. Click **Explore the night shift** for a ready-made game, or **Test the lobby** to change rules first.
+4. Use the top selector to switch between Darius (GM), simulated players, and public presentation.
+5. Try individual actions/chats/votes, or use **Submit sample actions** and **Simulate night outcome**. Then select Darius and release the results.
+6. Continue into discussion, trial, and another night using the normal GM controls.
+
+No Node.js, internet, installation, terminal, or hosted server is required for this demo. Both supplied pictures, CSS, JavaScript, and the real rules engine are embedded in the HTML file. You can copy this single file anywhere. It simulates 16 players locally; it is not live multiplayer. Role switching is deliberately available only in this sandbox.
+
+The demo remembers progress in browser storage when the browser permits it. Use Export/Import demo save if file-based storage is restricted. Reset creates a new sandbox. Detached chat/public windows require browser popups to be allowed. Private role text is hidden by default. Real multiplayer still runs through the Node.js server with permissions enforced.
+
+The visual theme now uses your Draftersville entrance and Drafters-versus-Demons artwork directly, dark office surfaces, warm amber accents, confidential red dossiers, and green CRT chat panels. Announcements remain text; no role-event videos have been added.
+
+## Run the multiplayer server on Windows
 
 1. Install **Node.js 24** from https://nodejs.org/ . No other packages are required.
 2. Extract the entire ZIP. Do not run files from inside the ZIP.
@@ -122,7 +137,9 @@ All events currently use text. `public/media.js` contains the future event mappi
 - `game.js`: game rules, action permissions, chat access, and public/private state projections.
 - `public/`: browser interface, style, and future media mapping placeholders.
 - `test/`: gameplay/privacy tests and HTTP/SSE/restart integration test.
-- `START_GAME.bat`: Windows launcher.
+- `START_GAME.bat`: Windows server launcher.
+- `OFFLINE_DEMO.html`: standalone no-install browser sandbox.
+- `scripts/build-offline.py`: developer utility to rebuild the sandbox after changing shared code (Python needed only to rebuild it).
 - `Dockerfile` / `render.yaml`: deployment templates.
 
 ## Validation and current limits
