@@ -47,14 +47,42 @@ function success(r,p,key,text){
 function actionWindow(r,p){
   requireThat(p.id!==r.gmId&&p.alive&&r.phase==='night'&&!isDemon(p),'Actions are only available to living special roles at night.');
   requireThat(['analyst','succubus','doctor','guard','priest'].includes(p.role),'Your role has no selectable night action.');
-  requireThat(!r.deadline||Date.now()<=r.deadline,'The action timer has expired.');
   requireThat(p.role==='succubus'?r.demonLocked:!r.demonLocked,p.role==='succubus'?'Succubus acts after the demon vote is locked.':'This action window has closed.');
   requireThat(!r.actions[p.id]?.locked,'Your actions are locked for this night.');
+}
+export function completion(r){
+  const living=r.players.filter(p=>p.alive&&!p.disqualified&&p.id!==r.gmId);
+  let required=[];
+  if(r.phase==='night'){
+    if(!r.demonLocked){
+      required=living.filter(p=>!isDemon(p)&&['analyst','doctor','guard','priest'].includes(p.role)).map(p=>({player:p.id,name:p.name,kind:'role',done:!!r.actions[p.id]?.locked}));
+      if(!r.skipAttack)required.push(...living.filter(isDemon).map(p=>({player:p.id,name:p.name,kind:'demon',done:Array.isArray(r.votes[p.id])})));
+    }else required=living.filter(p=>p.role==='succubus'&&!isDemon(p)).map(p=>({player:p.id,name:p.name,kind:'role',done:!!r.actions[p.id]?.locked}));
+  }else if(r.phase==='day'&&!r.skipTrialToday&&!r.trialDone)required=living.map(p=>({player:p.id,name:p.name,kind:'nomination',done:Object.hasOwn(r.nominations,p.id)}));
+  else if(r.phase==='trial')required=living.map(p=>({player:p.id,name:p.name,kind:'trial',done:Object.hasOwn(r.votes,p.id)}));
+  else if(r.phase==='review'&&r.enforcerPending){const p=r.players.find(p=>p.id===r.enforcerPending);if(p&&!p.disqualified)required=[{player:p.id,name:p.name,kind:'enforcer',done:false}];}
+  return required;
+}
+function requireComplete(r){const missing=completion(r).filter(x=>!x.done);requireThat(!missing.length,`Waiting for decisions: ${missing.map(x=>x.name).join(', ')}. Each player must act or skip; GM can override or disqualify.`);}
+function disqualify(r,p,reason){
+  requireThat(p&&p.id!==r.gmId&&!p.disqualified,'Select an employee who is not already disqualified; GM cannot disqualify themselves.');
+  p.disqualified=true;p.alive=false;p.ghost=false;p.enforcerUsed=true;
+  delete r.actions[p.id];delete r.actionDrafts[p.id];delete r.nominations[p.id];delete r.votes[p.id];if(r.enforcerPending===p.id)r.enforcerPending=null;
+  for(const [id,a]of Object.entries(r.actions))if(!a.investigate&&['protect','poison','redirect'].some(k=>a[k]===p.id)){r.actions[id]={locked:true,pass:true,cancelledByDQ:true};const actor=r.players.find(x=>x.id===id);if(actor)result(r,actor,'Your selected target was disqualified. This action has been cancelled.');}
+  for(const [id,ids]of Object.entries(r.votes))if(Array.isArray(ids))r.votes[id]=ids.filter(x=>x!==p.id);
+  for(const [id,t]of Object.entries(r.nominations))if(t===p.id)r.nominations[id]=null;
+  r.selectedTargets=r.selectedTargets.filter(id=>id!==p.id);if(r.targetOverride)r.targetOverride=r.targetOverride.filter(id=>id!==p.id);
+  if(r.cat.holder===p.id)r.cat.holder=null;
+  const text=`${p.name} has been disqualified and removed from play.${p.role?' Their role was '+label(p)+'.':''}`;
+  notice(r,text,'disqualification');log(r,`GM disqualified ${p.name}: ${reason}. Administrative removal; no death-trigger abilities or protection charges apply.`);
+  if(r.publicRoster){const row=r.publicRoster.find(x=>x.id===p.id);if(row)Object.assign(row,{alive:false,ghost:false,disqualified:true,role:p.role?label(p):null});r.publicAnnouncements.push(r.announcements.at(-1));}
+  if(r.trialTarget===p.id&&r.phase==='trial'){r.trialDone=true;r.voteHistory.push({round:r.round,target:p.id,nominations:{...r.nominations},votes:{...r.votes},cancelled:'Accused disqualified'});setPhase(r,'day',r.settings.daySeconds);notice(r,'The trial is cancelled because the accused was disqualified.','office');}
+  if(r.phase!=='lobby'&&r.phase!=='review'){victory(r);if(r.winner)setPhase(r,'finished');}
 }
 function setPhase(r,phase,seconds=0){r.phase=phase;r.deadline=seconds>0?Date.now()+seconds*1000:null;r.timerPaused=false;}
 function target(r,id){const p=r.players.find(p=>p.id===id && p.id!==r.gmId);requireThat(p&&p.alive,'Choose a living player.');return p;}
 function gm(r,p){requireThat(p.id===r.gmId,'Only the Game Master can do that.');}
-function frozen(r){r.publicRoster=r.players.filter(p=>p.id!==r.gmId).map(p=>({id:p.id,name:p.name,alive:p.alive,ghost:p.ghost,role:!p.alive?label(p):null}));r.publicAnnouncements=[...r.announcements];r.publicWinner=r.winner;}
+function frozen(r){r.publicRoster=r.players.filter(p=>p.id!==r.gmId).map(p=>({id:p.id,name:p.name,alive:p.alive,ghost:p.ghost,role:!p.alive?label(p):null,disqualified:!!p.disqualified}));r.publicAnnouncements=[...r.announcements];r.publicWinner=r.winner;}
 function beginReview(r){frozen(r);setPhase(r,'review');}
 function victory(r){
   const living=alive(r).filter(p=>p.id!==r.gmId); const demons=living.filter(isDemon);const good=living.filter(p=>!isEvil(p));
@@ -91,6 +119,7 @@ function attack(r,p,cause,visited=new Set()){
   death(r,p,cause);
 }
 function lockDemons(r){
+  requireComplete(r);
   requireThat(r.phase==='night'&&!r.demonLocked,'Demon voting is not open.');
   const count=r.skipAttack>0?0:r.doubleAttack>0?2:1;const scores=new Map();
   for(const [id,ids] of Object.entries(r.votes)){const voter=r.players.find(p=>p.id===id);if(voter?.alive&&isDemon(voter))for(const t of ids)scores.set(t,(scores.get(t)||0)+1);}
@@ -98,7 +127,7 @@ function lockDemons(r){
   // Ties stay under GM control: no hidden automatic kill choice.
   if(!r.targetOverride&&count&&groups.length){const cutoff=groups[Math.min(count,groups.length)-1][1];const higher=groups.filter(x=>x[1]>cutoff),tied=groups.filter(x=>x[1]===cutoff);if(higher.length+tied.length>count){fail('Demon target vote is tied. Use GM target override before locking.');}}
   r.selectedTargets=r.targetOverride ? [...r.targetOverride] : groups.slice(0,count).map(x=>x[0]);delete r.targetOverride;
-  if(count)requireThat(r.selectedTargets.length===Math.min(count,alive(r).filter(p=>p.id!==r.gmId&&!isDemon(p)).length),'Demon targets are missing. Ask for votes or use the GM target override.');
+  if(count&&r.selectedTargets.length)requireThat(r.selectedTargets.length===Math.min(count,alive(r).filter(p=>p.id!==r.gmId&&!isDemon(p)).length),'Demon targets are missing. Ask for votes or use the GM target override.');
   r.demonLocked=true;setPhase(r,'night',r.settings.nightSeconds);log(r,'Demon vote locked. Succubus investigation is now available.');
 }
 export function perform(r,p,cmd,data={}){
@@ -108,9 +137,9 @@ export function perform(r,p,cmd,data={}){
     requireThat(r.phase==='lobby','GM selection is only available in the lobby.');requireThat(!r.gmId,'A Game Master is already selected.');
     requireThat(p.name.toLowerCase()==='darius'&&data.secret===r.gmSecret,'Automatic Darius selection requires the private GM code.');r.gmId=p.id;notice(r,`${p.name} is the Game Master.`,'office');break;
   case 'voteGM':{
-    requireThat(r.phase==='lobby'&&!r.gmId,'GM voting is closed.');requireThat(r.players.some(x=>x.id===data.target),'Choose a candidate.');r.gmVotes[p.id]=data.target;
+    requireThat(r.phase==='lobby'&&!r.gmId,'GM voting is closed.');requireThat(r.players.some(x=>x.id===data.target&&!x.disqualified),'Choose a candidate.');r.gmVotes[p.id]=data.target;
     const counts=Object.values(r.gmVotes).filter(x=>x===data.target).length;
-    if(counts>r.players.length/2){r.gmId=data.target;notice(r,`${r.players.find(x=>x.id===data.target).name} was elected Game Master.`,'office');}break;}
+    if(counts>r.players.filter(x=>!x.disqualified).length/2){r.gmId=data.target;notice(r,`${r.players.find(x=>x.id===data.target).name} was elected Game Master.`,'office');}break;}
   case 'settings':{
     gm(r,p);requireThat(r.phase==='lobby','Settings are locked once play starts.');const s=data.settings;
     requireThat(s&&['player','random'].includes(s.priestTarget)&&['acquit','gm'].includes(s.tie),'Invalid rule settings.');
@@ -118,7 +147,7 @@ export function perform(r,p,cmd,data={}){
     for(const [role,n] of Object.entries(s.roles||{}))requireThat(role in ROLES&&role!=='drafter'&&Number.isInteger(n)&&n>=0&&n<=(DEMONS.includes(role)?30:1),'Use 0–1 for unique special roles, and 0–30 for demon variants.');
     requireThat(Object.keys(s.roles||{}).length===Object.keys(defaults().roles).length,'Provide every special-role count.');requireThat(s.autoRevealSuccess===undefined||typeof s.autoRevealSuccess==='boolean','Success notice setting must be a checkbox.');r.settings={...structuredClone(s),autoRevealSuccess:!!s.autoRevealSuccess};break;}
   case 'start':{
-    gm(r,p);requireThat(r.phase==='lobby','Game already started.');const ps=r.players.filter(x=>x.id!==r.gmId);requireThat(ps.length>=4,'At least four players are needed.');
+    gm(r,p);requireThat(r.phase==='lobby','Game already started.');const ps=r.players.filter(x=>x.id!==r.gmId&&!x.disqualified);requireThat(ps.length>=4,'At least four players are needed.');
     const deck=Object.entries(r.settings.roles).flatMap(([role,n])=>Array(n).fill(role));requireThat(deck.length<=ps.length,'Special-role counts exceed player count. Lower counts in the rules board.');requireThat(deck.some(x=>DEMONS.includes(x)),'Include at least one Workload Demon.');
     while(deck.length<ps.length)deck.push('drafter');for(let i=deck.length-1;i>0;i--){const j=randomInt(i+1);[deck[i],deck[j]]=[deck[j],deck[i]];}
     ps.forEach((x,i)=>{x.role=deck[i];});r.announcements.push({text:'The office doors are locked. Trust no one.',at:Date.now(),media:null});startNight(r);break;}
@@ -157,7 +186,7 @@ export function perform(r,p,cmd,data={}){
   case 'demonVote':{
     requireThat(r.phase==='night'&&!r.demonLocked&&p.alive&&isDemon(p),'Demon voting is unavailable.');const count=r.skipAttack?0:r.doubleAttack?2:1;requireThat(count>0,'Demons are sick and miss this attack.');const ids=[...new Set(data.targets||[])];requireThat(ids.length===count,'Select the required number of different targets.');ids.forEach(id=>requireThat(!isDemon(target(r,id)),'Demons cannot target a fellow demon.'));r.votes[p.id]=ids;break;}
   case 'targetOverride':gm(r,p);requireThat(r.phase==='night'&&!r.demonLocked,'Targets are locked.');{
-    const count=r.skipAttack?0:r.doubleAttack?2:1;const ids=[...new Set(data.targets||[])];requireThat(ids.length===count,'Choose the required number of targets.');ids.forEach(id=>requireThat(!isDemon(target(r,id)),'Choose a non-demon target.'));r.targetOverride=ids;log(r,'GM set a demon target override.');break;}
+    const count=r.skipAttack?0:r.doubleAttack?2:1;const ids=[...new Set(data.targets||[])];requireThat(ids.length===0||ids.length===count,'Choose the required number of targets, or explicitly waive the attack.');ids.forEach(id=>requireThat(!isDemon(target(r,id)),'Choose a non-demon target.'));r.targetOverride=ids;log(r,'GM set a demon target override.');break;}
   case 'lockDemons':gm(r,p);lockDemons(r);break;
   case 'answer':{
     // Compatibility for older GM clients. Answers are now delivered on lock-in.
@@ -167,7 +196,7 @@ export function perform(r,p,cmd,data={}){
     gm(r,p);const a=r.achievements.find(x=>x.id===data.id);requireThat(a&&a.releasable&&!a.released&&r.phase!=='review','This success notice is not available for release.');notice(r,a.text,'success');a.released=true;break;
   }
   case 'resolveNight':{
-    gm(r,p);requireThat(r.phase==='night'&&r.demonLocked,'Lock demon voting first.');requireThat(!Object.values(r.actions).some(a=>a.investigate&&!a.answered),'Answer pending investigations first.');beginReview(r);
+    gm(r,p);requireThat(r.phase==='night'&&r.demonLocked,'Lock demon voting first.');requireComplete(r);requireThat(!Object.values(r.actions).some(a=>a.investigate&&!a.answered),'Answer pending investigations first.');beginReview(r);
     for(const x of r.players)if(r.actions[x.id]?.locked&&!r.actions[x.id]?.investigate)result(r,x,r.actions[x.id].pass?'You skipped this night.':'Your locked action has been processed.',true);
     // Record consumable uses before attacks; resolve poison after demon attacks.
     const poisons=[];for(const x of alive(r)){const a=r.actions[x.id]||{};if(x.role==='doctor'){if(a.protect===x.id)x.doctorSelf--;if(a.poison){x.doctorPoison--;poisons.push({target:a.poison,doctor:x.id});}}}
@@ -184,18 +213,36 @@ export function perform(r,p,cmd,data={}){
     if(r.winner)setPhase(r,'finished');else{if(r.reviewNext==='day'){r.skipTrialToday=!!r.skipTrial;r.skipTrial=0;r.trialDone=false;}setPhase(r,'day',r.settings.daySeconds);}
     if(r.reviewNext==='day')for(const x of r.players){if(x.converted&&!x.conversionNotified){result(r,x,'The workload consumes you. You have become a Workload Demon.');x.conversionNotified=true;}}
     r.reviewNext=null;break;}
+  case 'skipDecision':{
+    const entry=completion(r).find(x=>x.player===p.id);requireThat(entry,'You do not have a decision in this phase.');
+    if(entry.kind==='role'){perform(r,p,'skipAction');break;}
+    if(entry.kind==='demon')r.votes[p.id]=[];else if(entry.kind==='nomination')r.nominations[p.id]=null;else if(entry.kind==='trial')r.votes[p.id]='abstain';else{perform(r,p,'enforcer',{});}
+    break;
+  }
+  case 'gmDecision':{
+    gm(r,p);const entry=completion(r).find(x=>x.player===data.player&&!x.done);requireThat(entry,'Select a player with an outstanding decision.');
+    const actor=r.players.find(x=>x.id===entry.player);const reason=clean(data.reason,250)||'Player unavailable';
+    if(data.kind==='skip'){perform(r,actor,'skipDecision');}
+    else if(entry.kind==='role'){delete r.actionDrafts[actor.id];perform(r,actor,'action',{kind:data.kind,target:data.target});perform(r,actor,'lockAction');r.actions[actor.id].gmOverride=true;}
+    else if(entry.kind==='demon'){perform(r,actor,'demonVote',{targets:data.targets||[data.target]});}
+    else if(entry.kind==='nomination'){perform(r,actor,'nominateVote',{target:data.target});}
+    else if(entry.kind==='trial'){perform(r,actor,'trialVote',{vote:data.kind});}
+    else perform(r,actor,'enforcer',{target:data.target});
+    log(r,`GM override for ${actor.name}: ${data.kind}; ${reason}.`);result(r,actor,'The Game Master submitted your outstanding decision.');break;
+  }
+  case 'disqualify':gm(r,p);requireThat(r.phase!=='finished','The game is already finished.');disqualify(r,r.players.find(x=>x.id===data.player),clean(data.reason,250)||'Emergency departure');break;
   case 'nominateVote':requireThat(r.phase==='day'&&!r.skipTrialToday&&!r.trialDone&&p.alive&&p.id!==r.gmId,'Nomination voting is closed.');r.nominations[p.id]=target(r,data.target).id;break;
-  case 'trial':gm(r,p);requireThat(r.phase==='day'&&!r.skipTrialToday&&!r.trialDone,'Trial is unavailable today.');r.trialTarget=target(r,data.target).id;r.votes={};setPhase(r,'trial',r.settings.trialSeconds);break;
+  case 'trial':gm(r,p);requireThat(r.phase==='day'&&!r.skipTrialToday&&!r.trialDone,'Trial is unavailable today.');requireComplete(r);r.trialTarget=target(r,data.target).id;r.votes={};setPhase(r,'trial',r.settings.trialSeconds);break;
   case 'trialVote':requireThat(r.phase==='trial'&&p.alive&&p.id!==r.gmId,'You cannot vote now.');requireThat(['execute','spare','abstain'].includes(data.vote),'Invalid vote.');r.votes[p.id]=data.vote;break;
   case 'resolveTrial':{
-    gm(r,p);requireThat(r.phase==='trial','No trial is running.');const yes=Object.values(r.votes).filter(v=>v==='execute').length,no=Object.values(r.votes).filter(v=>v==='spare').length;
+    gm(r,p);requireThat(r.phase==='trial','No trial is running.');requireComplete(r);const yes=Object.values(r.votes).filter(v=>v==='execute').length,no=Object.values(r.votes).filter(v=>v==='spare').length;
     if(yes===no&&r.settings.tie==='gm')requireThat(['execute','spare'].includes(data.decision),'Choose a tie decision.');const execute=yes>no||(yes===no&&r.settings.tie==='gm'&&data.decision==='execute');
     r.voteHistory.push({round:r.round,target:r.trialTarget,nominations:{...r.nominations},votes:{...r.votes}});r.trialDone=true;beginReview(r);if(execute)attack(r,r.players.find(x=>x.id===r.trialTarget),'trial');else announce(r,`${r.players.find(x=>x.id===r.trialTarget).name} was spared by the office.`);r.reviewNext='trial';break;}
-  case 'nextNight':gm(r,p);requireThat(r.phase==='day','Start the next night from the day phase.');startNight(r);break;
+  case 'nextNight':gm(r,p);requireThat(r.phase==='day','Start the next night from the day phase.');requireComplete(r);startNight(r);break;
   case 'enforcer':{
     requireThat(r.phase==='review'&&r.enforcerPending,'There is no pending Enforcer action.');requireThat(p.id===r.gmId||p.id===r.enforcerPending,'Only the Enforcer or GM may choose.');const e=r.players.find(x=>x.id===r.enforcerPending);e.enforcerUsed=true;r.enforcerPending=null;
     if(data.target){const t=target(r,data.target);attack(r,t,'enforcer');if(!t.alive)success(r,e,'final-action','Enforcer has successfully carried out a final action.');}else log(r,'Enforcer final action waived.');result(r,e,'Your final action has been locked and processed.',true);break;}
-  case 'ghost':requireThat(r.phase!=='review'&&p.id!==r.gmId&&!p.alive&&!p.ghost&&!isEvil(p)&&p.role!=='analyst','You are not eligible for a ghost place.');requireThat(r.players.filter(x=>x.ghost).length<5,'All five ghost places are occupied.');p.ghost=true;notice(r,`${p.name} joins the office as a ghost.`,'ghost');break;
+  case 'ghost':requireThat(r.phase!=='review'&&p.id!==r.gmId&&!p.alive&&!p.ghost&&!p.disqualified&&!isEvil(p)&&p.role!=='analyst','You are not eligible for a ghost place.');requireThat(r.players.filter(x=>x.ghost).length<5,'All five ghost places are occupied.');p.ghost=true;notice(r,`${p.name} joins the office as a ghost.`,'ghost');break;
   case 'timer':{
     gm(r,p);requireThat(['night','day','trial'].includes(r.phase),'There is no active phase timer.');
     if(data.mode==='pause'){r.timerRemaining=r.deadline?Math.max(0,r.deadline-Date.now()):0;r.deadline=null;r.timerPaused=true;}else if(data.mode==='resume'){r.deadline=r.timerRemaining?Date.now()+r.timerRemaining:null;r.timerPaused=false;}else fail('Unknown timer command.');break;}
@@ -210,18 +257,22 @@ export function canRead(r,p,channel){
 }
 export function view(r,p=null){
   upgradeRoom(r);const master=p?.id===r.gmId;const review=r.phase==='review';
-  const roster=(!master&&review?r.publicRoster:null)||r.players.filter(x=>x.id!==r.gmId).map(x=>({id:x.id,name:x.name,alive:x.alive,ghost:x.ghost,role:master||!x.alive?label(x):null,...(master?{roleKey:x.role,converted:x.converted,guardLives:x.guardLives,doctorSelf:x.doctorSelf,doctorPoison:x.doctorPoison,priestProtect:x.priestProtect,priestRedirect:x.priestRedirect}: {})}));
+  const roster=(!master&&review?r.publicRoster:null)||r.players.filter(x=>x.id!==r.gmId).map(x=>({id:x.id,name:x.name,alive:x.alive,ghost:x.ghost,disqualified:!!x.disqualified,role:master||!x.alive?label(x):null,...(master?{roleKey:x.role,converted:x.converted,guardLives:x.guardLives,doctorSelf:x.doctorSelf,doctorPoison:x.doctorPoison,priestProtect:x.priestProtect,priestRedirect:x.priestRedirect}: {})}));
   const out={code:r.code,phase:r.phase,round:r.round,revision:r.revision,gmName:r.players.find(x=>x.id===r.gmId)?.name||null,gmId:r.gmId,players:roster,settings:r.settings,deadline:r.deadline,timerPaused:r.timerPaused,timerRemaining:r.timerRemaining,trialTarget:r.trialTarget,skipTrialToday:r.skipTrialToday,trialDone:!!r.trialDone,winner:!master&&review?r.publicWinner:r.winner,announcements:!master&&review?r.publicAnnouncements:r.announcements,gmVotes:r.phase==='lobby'?r.gmVotes:{},nominations:r.nominations,history:r.voteHistory,votes:r.phase==='trial'||(r.phase==='day'&&r.trialDone)||(r.phase==='review'&&r.reviewNext==='trial')?r.votes:{}};
   if(!p)return out;
-  const pub=roster.find(x=>x.id===p.id);out.me={id:p.id,name:p.name,gm:master,alive:review&&!master?pub?.alive:p.alive,ghost:p.ghost,role:review&&!master?(p.converted&&!p.conversionNotified?ROLES[p.role]:label(p)):label(p),roleKey:p.role,converted:review&&!master?!!p.conversionNotified:p.converted};
+  const pub=roster.find(x=>x.id===p.id);out.me={id:p.id,name:p.name,gm:master,alive:review&&!master?pub?.alive:p.alive,ghost:p.ghost,disqualified:!!p.disqualified,role:review&&!master?(p.converted&&!p.conversionNotified?ROLES[p.role]:label(p)):label(p),roleKey:p.role,converted:review&&!master?!!p.conversionNotified:p.converted};
   if(!review||master){out.me.guardLives=p.guardLives;out.me.doctorSelf=p.doctorSelf;out.me.doctorPoison=p.doctorPoison;out.me.priestProtect=p.priestProtect;out.me.priestRedirect=p.priestRedirect;}
-  out.channels={};for(const key of ['public','demons'])if(canRead(r,p,key)&&(!review||master||key==='public'))out.channels[key]=r.channels[key]||[];
+  out.channels={};for(const key of ['public','demons']){
+    const allowed=review&&!master?key==='public'||(key==='demons'&&pub?.alive&&isDemon(p)&&(!p.converted||p.conversionNotified)):canRead(r,p,key);
+    if(allowed)out.channels[key]=r.channels[key]||[];
+  }
   out.myAction=review&&!master?{}:r.actions[p.id]||{};out.myDraft=review?{}:r.actionDrafts[p.id]||{};out.roleResults=(r.roleResults[p.id]||[]).filter(x=>!x.pending);
-  out.actionWindow=r.phase==='night'&&p.alive&&p.id!==r.gmId&&!isDemon(p)&&['guard','doctor','priest','analyst','succubus'].includes(p.role)&&(p.role==='succubus'?r.demonLocked:!r.demonLocked)&&(!r.deadline||Date.now()<=r.deadline);
-  out.myVote=r.votes[p.id];out.ghostAvailable=!review&&!p.alive&&!p.ghost&&!isEvil(p)&&p.role!=='analyst'&&r.players.filter(x=>x.ghost).length<5;
+  out.actionWindow=r.phase==='night'&&p.alive&&p.id!==r.gmId&&!isDemon(p)&&['guard','doctor','priest','analyst','succubus'].includes(p.role)&&(p.role==='succubus'?r.demonLocked:!r.demonLocked);
+  out.decision=completion(r).find(x=>x.player===p.id)||null;
+  out.myVote=r.votes[p.id];out.ghostAvailable=!review&&!p.alive&&!p.ghost&&!p.disqualified&&!isEvil(p)&&p.role!=='analyst'&&r.players.filter(x=>x.ghost).length<5;
   if(!review&&((p.alive&&isDemon(p))||master)){out.demonLocked=r.demonLocked;out.attackCount=r.skipAttack?0:r.doubleAttack?2:1;out.demonTeam=r.players.filter(isDemon).map(x=>x.id);out.demonVotes=r.phase==='night'?r.votes:{};}
   if(!review&&p.alive&&p.role==='succubus')out.demonLocked=r.demonLocked;
   if(r.enforcerPending===p.id)out.enforcerPending=true;
-  if(master){out.actions=r.actions;out.cat=r.cat;out.pending=r.pending;out.privateLog=r.privateLog;out.achievements=r.achievements;out.enforcerPlayer=r.enforcerPending;out.selectedTargets=r.selectedTargets;out.targetOverride=r.targetOverride;out.effects={skipAttack:r.skipAttack,doubleAttack:r.doubleAttack,skipTrial:r.skipTrial};}
+  if(master){out.completion=completion(r);out.actions=r.actions;out.cat=r.cat;out.pending=r.pending;out.privateLog=r.privateLog;out.achievements=r.achievements;out.enforcerPlayer=r.enforcerPending;out.selectedTargets=r.selectedTargets;out.targetOverride=r.targetOverride;out.effects={skipAttack:r.skipAttack,doubleAttack:r.doubleAttack,skipTrial:r.skipTrial};}
   return out;
 }

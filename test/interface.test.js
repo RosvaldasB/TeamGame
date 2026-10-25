@@ -23,3 +23,11 @@ test('chat labels only show General and Demons even if old UUID channels are pre
 test('ledger precedes notices and controls; dead ghosts show revealed role on the right',()=>{
  const {c,app,run}=client();const r=newRoom('OFFICE','Darius','secret-code'),gm=r.players[0];perform(r,gm,'claimGM',{secret:'secret-code'});for(let i=0;i<15;i++)addPlayer(r,'P'+i);perform(r,gm,'start');const dead=r.players[1];dead.alive=false;dead.ghost=true;r.phase='day';c.v=view(r);run('state=v;publicMode=true;code="OFFICE";render()');assert.ok(app.innerHTML.indexOf('PARTY NIGHT LOG')<app.innerHTML.indexOf('OFFICE NOTICE BOARD'));assert.match(app.innerHTML,/row-ghost/);assert.match(app.innerHTML,/Revealed role/);assert.ok(app.innerHTML.includes(view(r).players[0].role));assert.ok(!app.innerHTML.includes('GM ONLY'));assert.ok(!app.innerHTML.includes('office-scene'));
 });
+test('main screen always shows only permitted chats alongside the role or demon dashboard',()=>{
+ const {c,app,run}=client();const r=newRoom('OFFICE','Darius','secret-code'),gm=r.players[0];perform(r,gm,'claimGM',{secret:'secret-code'});for(let i=0;i<15;i++)addPlayer(r,'P'+i);perform(r,gm,'start');
+ for(const role of ['drafter','analyst','doctor','succubus','auditor']){
+  const p=r.players.find(x=>x.role===role);c.v=view(r,p);run('state=v;publicMode=false;code="OFFICE";chatOpen=false;render()');
+  assert.match(app.innerHTML,/id="chatForm"/);assert.match(app.innerHTML,/COMMUNICATION TERMINAL/);assert.match(app.innerHTML,/data-channel="public"/);assert.ok(!app.innerHTML.includes('closeChat'));assert.ok(!app.innerHTML.includes('Private · GM'));
+  if(role==='auditor'){assert.match(app.innerHTML,/data-channel="demons"/);assert.match(app.innerHTML,/DEMON ACTION DASHBOARD/);assert.match(app.innerHTML,/id="demonVote"/);}else{assert.ok(!app.innerHTML.includes('data-channel="demons"'));if(role!=='drafter')assert.match(app.innerHTML,/ROLE ACTION DASHBOARD/);}
+ }
+});

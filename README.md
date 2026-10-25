@@ -1,4 +1,4 @@
-# Drafters vs Workload Demons — party ledger, role dashboards + offline sandbox v1.2
+# Drafters vs Workload Demons — party ledger, role dashboards + offline sandbox v1.3.1
 
 A browser deduction game for 30 players plus one human Game Master. English only, with a retro drafting-office interface, private rooms, live text chats, secret role actions, and text announcements. Desktop first; a narrow layout is included, but phone usability still needs testing.
 
@@ -51,16 +51,42 @@ For normal remote play, deploy the project to an HTTPS hosting service. Everyone
 1. Create a room as Darius. Join from another browser profile/private window for each player. At least four players are needed; the default 12 special roles must be reduced for a smaller test.
 2. In the lobby, save role counts, timers, Priest targeting, tie behavior, and the new **Automatically publish special-role success notices** checkbox. It is **off by default**.
 3. Assign roles and begin night. The main view is now the **Party Night Log** spreadsheet. It shows employee status, current public nomination/trial votes, previous public voting rounds, and revealed roles in the right-hand column. Dead ghosts keep their revealed role visible.
-4. General and Demons are the only chats. A dark-orange button and unread count signal messages not yet read. Demons chat is available only to living demons and GM. The chat panel opens when its button is clicked; close it to prioritize the table.
+4. General and Demons are the only chats. A dark-orange button and unread count signal messages not yet read. Demons chat is available only to living demons and GM. The chat panel is always visible below the party table, alongside the private action dashboard. General is selected by default. Clicking a chat button selects that room and scrolls to it.
 5. Special-role players use **Your Desk → Private role action dashboard**. Save a selection, review the draft, then **Lock in actions**. The GM receives only the locked submission. Saved drafts cannot protect, poison, or investigate. Locks are final for the night. Choose **Skip this window** to submit no action.
-6. Analyst, Doctor, Guard, and Priest act before the GM locks demon voting. The Succubus window opens after that lock; it receives a fresh night-length timer. Expired windows reject saves and locks on the server. Priest can save both a protection target and a redirection target before locking the combined selection.
+6. Analyst, Doctor, Guard, and Priest act before the GM locks demon voting. The Succubus window opens after that lock; it receives a fresh night-length timer. When the timer reaches zero, the window stays open until every required player has acted or explicitly skipped. The server blocks phase advancement while decisions are missing. Priest can save both a protection target and a redirection target before locking the combined selection.
 7. Investigations deliver a private **Yes/No** in the acting player's dashboard immediately after lock-in, with a private result history. No chat or public bulletin receives that answer. The GM can inspect the locked selection and answer.
 8. GM resolves the night privately. Review deaths/protections and any pending Enforcer action. Private protection outcome details remain held until GM releases the outcomes to the notice board.
 9. With automatic success notices checked, successful role tasks are posted on the notice board after the GM releases outcomes. With it unchecked, they stay in the GM dashboard until GM clicks **Reveal on notice board**. These menacing notices name the role/task, never the acting or investigated player. Secret Burned-Out conversions are never auto-announced publicly.
 10. During discussion, living players can choose a public nomination. The table shows who nominated whom. GM chooses the final accused and opens trial voting. Execute, spare, and abstain votes are shown against that accused. One trial per day; nominations and final ballots are preserved in the table's Shift columns.
 11. Begin the next night. Night demon targets never enter the public history. Only demons and GM see the secret target-vote column; everyone else sees **Sealed**.
 
-Timers require the GM to advance phases and announce results. Zero means unlimited. Unsubmitted roles skip their optional action when the GM closes their window; Guard's automatic self-protection still applies. Start a new room for another game.
+Timers require the GM to advance phases and announce results. Zero means unlimited. Unsubmitted roles never skip automatically. Every required decision must be submitted or explicitly skipped. The GM may submit an audited override for an unavailable player. Guard's automatic self-protection still applies. Start a new room for another game.
+
+## Chat access (v1.3.1)
+
+| Participant | Chat rooms | Actions |
+| --- | --- | --- |
+| Ordinary Drafter | General only | Public nominations and trial votes in Your Desk |
+| Special roles, including Succubus | General only | Private role action dashboard; no GM chat |
+| Attacking Workload Demons and converted Burned-Out Drafters | General + Demons | Dedicated demon target/action dashboard |
+| Game Master | General + Demons | GM dashboard and private role submissions |
+
+The chat panel is visible by default in the lobby and game. It is not present in the public presentation window. General retains the agreed read-only night rule; demon discussion is available at night. All chat is read-only during outcome review. Already-established demons retain a read-only demon room during review; secret conversions are not exposed before the GM releases results. Dead/disqualified players retain the existing spectator/ghost restrictions. Unread messages in inactive rooms keep their dark-orange indicators.
+
+## Mandatory participation and emergencies (v1.3)
+
+- Before locking demon voting: every living Analyst, Doctor, Guard and Priest must lock an action or explicitly skip; each living attacking demon must choose targets or skip their vote. When demons are sick, they have no attack decision to submit.
+- After locking demon voting: every living Succubus must investigate or explicitly skip before night resolution.
+- During the day: every living player must nominate someone or choose Skip nomination before the GM can open a trial or move directly to another night. No nomination is required if voting was skipped by Touched by Heaven or the day's trial is already complete.
+- During a trial: every living player must execute, spare, or abstain. The GM cannot resolve while ballots are missing.
+- Enforcer's pending final decision must be submitted or waived before outcomes are published, as before.
+- Timers hold at zero. They never turn silence into a skip, and players can still submit while the phase is waiting. The server enforces these gates; disabling buttons alone is not the protection.
+- The GM's Mandatory decisions panel shows a completion checklist. **Override: skip** records a skip for one unavailable person. The expanded form can submit a valid role action, nomination, attack vote, trial ballot, or final action instead. Overrides apply only to outstanding decisions and are logged with a reason.
+- **Emergency → Disqualify player** requires a browser confirmation, immediately removes the player from required decisions and play, revokes writing/actions/voting/ghost eligibility, and posts an administrative notice. It does not consume Cat charges or trigger Succubus, Heaven, or Enforcer death abilities. Roles are revealed on removal. GM cannot disqualify themselves.
+- Submitted actions aimed at a disqualified target are cancelled without spending consumables; votes targeting that person are cleared or converted to explicit skips. Removing the accused cancels the current trial. Removing a Cat holder clears the holder until the next random night assignment, without spending a charge. The table marks the player Disqualified.
+- In private review, the disqualification is public immediately, but other pending night outcomes stay hidden. Win conditions are checked immediately outside review and at normal outcome release inside review.
+
+The offline demo has **Fill missing decisions (skip)** to acknowledge every remaining turn for quick testing. This uses the same audited GM override API; it is not an automatic timeout skip in real games.
 
 ## Privacy, chats, notices and screen sharing
 
@@ -69,7 +95,7 @@ Timers require the GM to advance phases and announce results. Zero means unlimit
 - No role drafts, answers, private result history, successes awaiting release, Cat ownership or unused ability counts are sent to other players or the public presentation.
 - The GM's table reveals all roles and includes a private resources strip. **Share only the separate public presentation window**, which receives public data only. Hide all secrets switches the GM screen to that projection.
 - Public chat is read-only at night; private demon chat stays available. Dead spectators can read public chat but cannot write; eligible ghosts can write but cannot vote or reveal secrets.
-- Unread chat receipts are tracked separately for each room, player and channel. An open, focused chat at the bottom marks arriving messages read; a closed/background chat keeps the orange unread indicator.
+- Unread chat receipts are tracked separately for each room, player and channel. An open, focused chat at the bottom marks arriving messages read; an inactive chat room, off-screen chat, or background window keeps the orange unread indicator.
 - Refreshing reconnects using the browser token. Reconnect-key files grant role/session access: keep them private.
 - Old saved rooms are migrated on access: private player channels are removed, old system messages become board notices, and existing submitted role selections remain locked. Test with a new room when changing versions; do not update the service mid-game.
 
@@ -95,7 +121,7 @@ Unique special roles have counts of 0 or 1; demon variants can have multiple cop
 
 This is a runnable server project, not a single static HTML page. Choose **Web Service**, not Static Site.
 
-1. Create a private GitHub repository. The v1.2 deployment ZIP has no extra enclosing folder. Upload **all files and subfolders**, including `public/assets`, so `package.json`, `server.js`, and `public` are at the repository root. Do not upload `data` or reconnect keys.
+1. Create a private GitHub repository. The v1.3.1 deployment ZIP has no extra enclosing folder. Upload **all files and subfolders**, including `public/assets`, so `package.json`, `server.js`, and `public` are at the repository root. Do not upload `data` or reconnect keys.
 2. In https://dashboard.render.com/ choose **New → Web Service** and connect the repository.
 3. Select the Node runtime and a region near your team.
 4. Set **Build Command** to `npm test` and **Start Command** to `npm start`.

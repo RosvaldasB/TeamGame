@@ -6,7 +6,7 @@ function rememberDemo(){try{localStorage.setItem('draft-offline-save-v1',JSON.st
 function savedDemo(){try{return JSON.parse(localStorage.getItem('draft-offline-save-v1')||'null');}catch{return null;}}
 window.OFFLINE_APP={
  entry(){return `<div class="offline-entry"><button id="demo-lobby">Test the lobby</button><button id="demo-night" class="danger">Explore the night shift</button><button id="demo-resume" class="secondary">Resume saved demo</button></div><p class="home-note">OFFLINE SANDBOX · No installation, account, or internet required.<br>Switch between 16 simulated employees and the GM. This file does not connect real players.</p>`;},
- toolbar(){return `<section class="offline-tools"><div class="row"><span class="stamp">OFFLINE SANDBOX</span><select id="demo-person" aria-label="View as simulated participant"><option value="public" ${publicMode?'selected':''}>Public presentation · no secrets</option>${demoRoom.players.map(p=>`<option value="${p.id}" ${!publicMode&&p.id===demoPerson?'selected':''}>${esc(p.name)}${p.id===demoRoom.gmId?' · GAME MASTER':''}</option>`).join('')}</select><button id="demo-chat" class="secondary">Simulate unread messages</button><button id="demo-fill" class="secondary">Submit sample actions</button><button id="demo-round" class="danger">Simulate night outcome</button><button id="demo-save" class="secondary">Export demo save</button><button id="demo-import" class="secondary">Import demo save</button><input id="demo-save-file" type="file" accept=".json,application/json" hidden><button id="demo-reset" class="secondary">New demo lobby</button></div><p>Local simulated players · choose a player to test their role, chat, and votes; choose Darius to narrate and release results. Sample actions are sandbox helpers.</p></section>`;},
+ toolbar(){return `<section class="offline-tools"><div class="row"><span class="stamp">OFFLINE SANDBOX</span><select id="demo-person" aria-label="View as simulated participant"><option value="public" ${publicMode?'selected':''}>Public presentation · no secrets</option>${demoRoom.players.map(p=>`<option value="${p.id}" ${!publicMode&&p.id===demoPerson?'selected':''}>${esc(p.name)}${p.id===demoRoom.gmId?' · GAME MASTER':''}</option>`).join('')}</select><button id="demo-chat" class="secondary">Simulate unread messages</button><button id="demo-complete" class="secondary">Fill missing decisions (skip)</button><button id="demo-fill" class="secondary">Submit sample actions</button><button id="demo-round" class="danger">Simulate night outcome</button><button id="demo-save" class="secondary">Export demo save</button><button id="demo-import" class="secondary">Import demo save</button><input id="demo-save-file" type="file" accept=".json,application/json" hidden><button id="demo-reset" class="secondary">New demo lobby</button></div><p>Local simulated players · choose a player to test their role, chat, and votes; choose Darius to narrate and release results. Sample actions are sandbox helpers.</p></section>`;},
  reset(phase='lobby',nickname='Darius',secret='offline-gm'){
   demoRoom=newRoom('OFFICE',nickname,secret);demoPerson=demoRoom.players[0].id;
   for(const n of demoNames)addPlayer(demoRoom,n);
@@ -25,11 +25,12 @@ window.OFFLINE_APP={
  },
  bindHome(){const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};on('demo-lobby',()=>this.reset('lobby'));on('demo-night',()=>this.reset('night'));on('demo-resume',()=>{const saved=savedDemo();if(!saved?.players?.length){toast('No saved offline demo yet.');return;}demoRoom=saved;demoPerson=saved.gmId||saved.players[0].id;publicMode=false;this.refresh();});},
  bind(){
-  const select=document.getElementById('demo-person');if(select){select.value=publicMode?'public':demoPerson;select.onchange=()=>{publicMode=select.value==='public';if(!publicMode)demoPerson=select.value;roleHidden=true;channel='public';chatOpen=false;this.refresh();};}
+  const select=document.getElementById('demo-person');if(select){select.value=publicMode?'public':demoPerson;select.onchange=()=>{publicMode=select.value==='public';if(!publicMode)demoPerson=select.value;roleHidden=true;channel='public';chatOpen=true;this.refresh();};}
   const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
   on('demo-reset',()=>{if(confirm('Replace this local demo with a fresh lobby?'))this.reset('lobby');});on('demo-save',()=>this.exportSave());
   on('demo-import',()=>document.getElementById('demo-save-file').click());const file=document.getElementById('demo-save-file');if(file)file.onchange=async()=>{try{const saved=JSON.parse(await file.files[0].text());if(!saved||!Array.isArray(saved.players)||!saved.players.length||saved.players.length>31||!saved.channels||!saved.settings||!saved.cat||!['lobby','night','review','day','trial','finished'].includes(saved.phase))throw Error('Invalid demo save.');demoRoom=saved;demoPerson=saved.gmId||saved.players[0].id;publicMode=false;rememberDemo();this.refresh();toast('Demo save restored.');}catch(e){toast(e.message);}};
   on('demo-chat',()=>{const next=structuredClone(demoRoom);msg(next,'public','Alex','Someone left a redline on my desk. Who was here last?');msg(next,'demons','THE DEADLINE','The next deadline will not survive the night.');next.revision++;demoRoom=next;rememberDemo();this.refresh();});
+  on('demo-complete',()=>{try{const next=structuredClone(demoRoom),gm=next.players.find(p=>p.id===next.gmId);for(const e of completion(next).filter(x=>!x.done))perform(next,gm,'gmDecision',{player:e.player,kind:'skip',reason:'Offline simulation helper'});demoRoom=next;rememberDemo();this.refresh();}catch(e){toast(e.message);}});
   on('demo-fill',()=>{try{this.sample(false);toast('Sample selections submitted. Switch to players to inspect or change them.');}catch(e){toast(e.message);}});
   on('demo-round',()=>{try{this.sample(true);toast('Night resolved privately. Select Darius to review and release announcements.');}catch(e){toast(e.message);}});
  },
@@ -45,11 +46,12 @@ window.OFFLINE_APP={
     if(isDemon(p)&&targets.length)perform(r,p,'demonVote',{targets:targets.map(t=>t.id)});
     if(p.role==='analyst'&&!r.actions[p.id]?.investigate){const evil=living.find(isEvil);if(evil){perform(r,p,'action',{kind:'investigate',target:evil.id});perform(r,p,'lockAction');}}
    }
-   if(resolve)perform(r,gm,'lockDemons');
+   if(resolve){for(const e of completion(r).filter(x=>!x.done))perform(r,gm,'gmDecision',{player:e.player,kind:'skip',reason:'Offline sample action helper'});perform(r,gm,'lockDemons');}
   }
   if(resolve){
    for(const p of living){if(p.role==='succubus'&&!r.actions[p.id]?.investigate){const a=living.find(x=>x.role==='analyst');if(a){perform(r,p,'action',{kind:'investigate',target:a.id});perform(r,p,'lockAction');}}}
    for(const [id,a]of Object.entries(r.actions))if(a.investigate&&!a.answered)perform(r,gm,'answer',{player:id});
+   for(const e of completion(r).filter(x=>!x.done))perform(r,gm,'gmDecision',{player:e.player,kind:'skip',reason:'Offline sample action helper'});
    perform(r,gm,'resolveNight');
   }
   demoRoom=r;rememberDemo();this.refresh();

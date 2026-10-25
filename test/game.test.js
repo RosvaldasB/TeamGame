@@ -1,5 +1,6 @@
+import {perform} from '../scripts/mechanic-support.js';
 import test from 'node:test';import assert from 'node:assert/strict';
-import {newRoom,addPlayer,perform,view,defaults,canRead} from '../game.js';
+import {newRoom,addPlayer,view,defaults,canRead} from '../game.js';
 function fixture(roles=['auditor','doctor','guard','analyst','succubus','burnout','priest','heaven','enforcer','drafter','drafter','drafter']){
  const r=newRoom('ABC123','Darius','private-code');const gm=r.players[0];perform(r,gm,'claimGM',{secret:'private-code'});
  for(let i=0;i<roles.length;i++)addPlayer(r,'Employee '+i);

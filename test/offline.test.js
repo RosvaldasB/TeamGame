@@ -9,8 +9,8 @@ test('self-contained offline HTML runs shared engine without network: roles, act
  run('window.OFFLINE_APP.sample(true)');assert.equal(run('demoRoom.phase'),'review');assert.ok(!app.innerHTML.includes('Holder:'));
  run('demoPerson=demoRoom.gmId;window.OFFLINE_APP.refresh()');assert.match(app.innerHTML,/Outcomes awaiting release/);
  run('perform(demoRoom,demoRoom.players[0],"publish");window.OFFLINE_APP.refresh()');assert.equal(run('demoRoom.phase'),'day');
- run('perform(demoRoom,demoRoom.players[0],"trial",{target:demoRoom.players.find(p=>p.alive&&p.role==="drafter").id});');
- run('perform(demoRoom,demoRoom.players.find(p=>p.alive&&p.id!==demoRoom.gmId),"trialVote",{vote:"spare"});perform(demoRoom,demoRoom.players[0],"resolveTrial");perform(demoRoom,demoRoom.players[0],"publish");window.OFFLINE_APP.refresh();');assert.equal(run('demoRoom.phase'),'day');
+ run('for(const e of completion(demoRoom).filter(x=>!x.done))perform(demoRoom,demoRoom.players[0],"gmDecision",{player:e.player,kind:"skip"});perform(demoRoom,demoRoom.players[0],"trial",{target:demoRoom.players.find(p=>p.alive&&p.role==="drafter").id});');
+ run('perform(demoRoom,demoRoom.players.find(p=>p.alive&&p.id!==demoRoom.gmId),"trialVote",{vote:"spare"});for(const e of completion(demoRoom).filter(x=>!x.done))perform(demoRoom,demoRoom.players[0],"gmDecision",{player:e.player,kind:"skip"});perform(demoRoom,demoRoom.players[0],"resolveTrial");perform(demoRoom,demoRoom.players[0],"publish");window.OFFLINE_APP.refresh();');assert.equal(run('demoRoom.phase'),'day');
  run('publicMode=true;window.OFFLINE_APP.refresh()');assert.ok(!app.innerHTML.includes('Holder:'));assert.ok(!app.innerHTML.includes('GAME MASTER CONTROL DESK'));assert.ok(run('state.me')===undefined);
  assert.ok(storage.has('draft-offline-save-v1'));
 });
