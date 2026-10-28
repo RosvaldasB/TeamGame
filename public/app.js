@@ -41,6 +41,38 @@ function chatButtons(){return ['public','demons'].filter(k=>state.channels?.[k])
  const n=unread(k);return `<button data-channel="${k}" class="chat-access ${n?'unread':''} ${chatOpen&&channel===k?'active':''}" aria-label="${k==='public'?'General':'Demons'} chat${n?`, ${n} unread messages`:''}">${k==='public'?'General':'Demons'}${n?` <span class="unread-count">${n}</span>`:''}</button>`;
  }).join('');}
 function publicVoteText(id,v,target){return v==='execute'?`Execute → ${name(target)}`:v==='spare'?`Spare → ${name(target)}`:v==='abstain'?'Abstain':v?name(v):'—';}
+// The coffee is a phase indicator, never a countdown or a phase controller.
+// Only the GM's private projection contains secret submission counts.
+function coffeeState(){
+ const privateGM=!!state.me?.gm&&!publicMode;
+ const required=privateGM?(state.completion||[]):[];
+ const fraction=required.length?required.filter(e=>e.done).length/required.length:0;
+ const active=state.players.filter(p=>p.alive&&!p.disqualified).length;
+ const publicFraction=collection=>active?Math.min(1,state.players.filter(p=>p.alive&&!p.disqualified&&Object.hasOwn(collection||{},p.id)).length/active):0;
+ let level=100,step=0,title='Fresh pot · office ready',note='The pot refills at the beginning of each day.';
+ if(state.phase==='day'){
+  if(state.trialDone){level=60;step=2;title='Day shift complete';note='Waiting for the GM to begin the night shift.';}
+  else if(state.skipTrialToday){level=100;title='Day discussion · no trial today';note='A fresh pot for the new day. Voting is skipped today; await the GM’s next night shift.';}
+  else{level=100-15*publicFraction(state.nominations);title='Day discussion & nominations';note='Public nominations drain the first cups. Choose a player or skip.';}
+ }else if(state.phase==='trial'){
+  level=80-15*publicFraction(state.votes);step=1;title='Day verdict';note='Execute, spare, or abstain. Every living player must decide.';
+ }else if(state.phase==='night'){
+  step=3;level=privateGM?(state.demonLocked?25-15*fraction:50-25*fraction):50;
+  title=privateGM?(state.demonLocked?'Succubus inquiry':'Role actions & demon voting'):'Night shift · private processing';
+  note=privateGM?'Coffee drains as required actions are locked or skipped. The GM advances the phase.':'The night level stays fixed to conceal roles and individual submissions.';
+ }else if(state.phase==='review'){
+  const trialReview=!!state.trialTarget;step=trialReview?2:4;level=trialReview?60:5;
+  title=trialReview?'Verdict under review':'Morning report under review';note='Awaiting the GM’s published report. Unreleased outcomes stay private.';
+ }else if(state.phase==='finished'){
+  step=5;level=0;title='Office closed · final report';note='The shift is over. See the notice board for the result.';
+ }else{note='Fresh coffee is ready. The GM is preparing the office.';}
+ return {privateGM,required,level:Math.round(level),step,title,note};
+}
+function coffeeTracker(){
+ const c=coffeeState(),labels=['DAY / NOMINATE','VERDICT','DAY CLOSED','NIGHT SHIFT','GM REVIEW','OFFICE CLOSED'];
+ const checklist=c.privateGM&&c.required.length?`<div class="coffee-checklist"><span class="coffee-private-label">GM ONLY · ${c.required.filter(e=>e.done).length}/${c.required.length} DECISIONS</span>${c.required.map(e=>`<span class="coffee-chip ${e.done?'filed':''}">${e.done?'✓':'…'} ${esc(e.name)} · ${esc(e.kind==='demon'?'Demon vote':e.kind==='role'?player(e.player)?.role||'Role action':e.kind)}</span>`).join('')}</div>`:'';
+ return `<section class="coffee-tracker" aria-label="Coffee day and night cycle tracker"><div class="coffee-plate"><b>OVERTIME<span>™</span></b><small>AUTOMATIC SHIFT DISPENSER<br>MODEL DW–09 · 1984</small><span class="coffee-service">FRESH POT<br>EVERY DAY</span></div><div class="coffee-body"><div class="coffee-reservoir" role="progressbar" aria-label="Coffee remaining in this day and night cycle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${c.level}"><div class="coffee-liquid" style="height:${c.level}%"></div><div class="coffee-glint"></div><span class="coffee-full">FULL ─</span><span class="coffee-empty">LOW ─</span></div><div class="coffee-console"><div class="coffee-screen"><span class="coffee-shift">${state.phase==='lobby'?'PRE-SHIFT':state.phase==='night'?'NIGHT '+state.round:'DAY '+state.round} / ${c.privateGM?'GM CONSOLE':'STAFF DISPLAY'}</span><h2>${esc(c.title)}</h2><span id="coffee-status" role="status">${c.privateGM&&c.required.some(e=>!e.done)?'DECISIONS REQUIRED · GM CONTROLS BELOW':'ON DUTY · '+(c.privateGM?'PRIVATE CHECKLIST':'PUBLIC PHASE DISPLAY')}</span></div><div class="coffee-route">${labels.map((label,i)=>`<span class="coffee-stop ${i===c.step?'current':i<c.step?'past':''}" ${i===c.step?'aria-current="step"':''}><i></i>${label}</span>`).join('')}</div></div></div><p class="coffee-caption">${esc(c.note)} <span>Coffee shows shift progress; the phase timer remains separate.</span></p>${checklist}</section>`;
+}
 function roster(){
  const history=state.history||[];const table=state.players.map((p,i)=>{
   let vote='—';if(state.phase==='night')vote=state.demonVotes?.[p.id]?.map(name).join(', ')||'Sealed';
@@ -147,7 +179,7 @@ function render(){
  else if(chatOnly)content=chat();
  else if(state.phase==='lobby')content=roster()+`<div class="ledger-layout"><div>${lobby()}${chat()}${announcements()}</div><div>${state.me.gm?settings():rules()}</div></div>`;
  else content=roster()+`<div class="ledger-layout"><div>${chat()}${announcements()}</div><div>${state.me.gm?gmControls():playerControls()}${state.me.gm?panel('PRIVATE EVENT LOG',`<div class="log">${[...state.privateLog].reverse().slice(0,60).map(x=>`<p>${esc(x.text)}</p>`).join('')}</div>`,'private'):`<details><summary>Rules & role reference</summary>${rules()}</details>`}</div></div>`;
- app.innerHTML=`${window.OFFLINE_APP?window.OFFLINE_APP.toolbar():''}<div class="toolbar">${toolbar}</div>${phase}${content}`;
+ app.innerHTML=`${window.OFFLINE_APP?window.OFFLINE_APP.toolbar():''}<div class="toolbar">${toolbar}</div>${phase}${chatOnly?'':coffeeTracker()}${content}`;
  document.querySelectorAll('input,textarea,select').forEach(el=>{const key=fieldKey(el);if(key in drafts&&el.type!=='file'){if(el.type==='checkbox')el.checked=drafts[key];else el.value=drafts[key];}});
  if(active){const el=document.getElementById(active);el?.focus();if(position!=null&&el?.setSelectionRange&&el.type!=='number')try{el.setSelectionRange(position,position);}catch{}}
  const messages=document.querySelector('#messages');if(messages){messages.scrollTop=atBottom?messages.scrollHeight:oldScroll;messages.onscroll=()=>{if(messages.scrollHeight-messages.scrollTop-messages.clientHeight<45&&focused){markRead(channel);document.querySelectorAll(`[data-channel="${channel}"]`).forEach(b=>{b.classList.remove('unread');b.querySelector('.unread-count')?.remove();});}};}
@@ -178,7 +210,15 @@ function bind(){
  on('leave',()=>{streamAbort?.abort();state=null;token=null;code='';if(!window.OFFLINE_APP)history.replaceState(null,'','/');home();if(window.OFFLINE_APP)window.OFFLINE_APP.bindHome();});
  on('reconnectKey',()=>{if(window.OFFLINE_APP){window.OFFLINE_APP.exportSave();return;}const blob=new Blob([`PRIVATE — do not share\nRoom: ${code}\nReconnect key: ${token}\nOpen ${location.origin} and use Reconnect with a saved key.\n`],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`private-reconnect-${code}.txt`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);});
 }
-function tick(){const el=document.getElementById('timer');if(!el||!state)return;el.textContent=state.timerPaused?'PAUSED':state.deadline?(()=>{const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));return seconds?`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`:state.me?.gm&&state.completion?.every(x=>x.done)?'TIME UP · READY TO ADVANCE':'TIME UP · WAITING FOR DECISIONS';})():'NO TIMER';}
+function coffeeTick(){
+ const status=document.getElementById('coffee-status');if(!status||!state)return;
+ const required=state.me?.gm&&!publicMode?(state.completion||[]):[];
+ const expired=state.deadline&&state.deadline<=Date.now();
+ const hold=expired&&required.some(e=>!e.done);
+ status.classList.toggle('coffee-held',!!hold);
+ status.textContent=state.phase==='finished'?'SHIFT COMPLETE':state.timerPaused?'TIMER PAUSED · PHASE HELD':hold?'SHIFT ON HOLD · ACTION OR SKIP REQUIRED':expired?'TIMER ENDED · AWAITING GM':required.some(e=>!e.done)?'DECISIONS REQUIRED · GM CONTROLS BELOW':required.length?'DECISIONS FILED · AWAITING GM':'ON DUTY · AWAITING GM PHASE ADVANCEMENT';
+}
+function tick(){coffeeTick();const el=document.getElementById('timer');if(!el||!state)return;el.textContent=state.timerPaused?'PAUSED':state.deadline?(()=>{const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));return seconds?`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`:state.me?.gm&&state.completion?.every(x=>x.done)?'TIME UP · READY TO ADVANCE':'TIME UP · WAITING FOR DECISIONS';})():'NO TIMER';}
 setInterval(tick,1000);
 window.addEventListener?.('scroll',readVisibleChat,{passive:true});
 if(document.addEventListener){document.addEventListener('visibilitychange',()=>{if(state&&!publicMode&&chatOpen&&document.visibilityState==='visible')render();});window.addEventListener?.('focus',()=>{if(state&&!publicMode&&chatOpen)render();});}

@@ -31,3 +31,26 @@ test('main screen always shows only permitted chats alongside the role or demon 
   if(role==='auditor'){assert.match(app.innerHTML,/data-channel="demons"/);assert.match(app.innerHTML,/DEMON ACTION DASHBOARD/);assert.match(app.innerHTML,/id="demonVote"/);}else{assert.ok(!app.innerHTML.includes('data-channel="demons"'));if(role!=='drafter')assert.match(app.innerHTML,/ROLE ACTION DASHBOARD/);}
  }
 });
+test('coffee drains across the real cycle and refills on morning publication',()=>{
+ const {c,run}=client();const v={players:[{id:'a',alive:true},{id:'b',alive:true}],me:{gm:true},completion:[],phase:'day',round:2,nominations:{},votes:{}};c.v=v;run('state=v');assert.equal(run('coffeeState().level'),100);
+ v.nominations={a:'b',b:null};assert.equal(run('coffeeState().level'),85);
+ v.phase='trial';v.votes={a:'execute'};assert.ok(run('coffeeState().level')<85);
+ v.phase='review';v.trialTarget='b';assert.equal(run('coffeeState().level'),60);
+ v.phase='day';v.trialDone=true;assert.equal(run('coffeeState().level'),60);
+ v.phase='night';v.trialTarget=null;v.completion=[{done:false},{done:false}];assert.equal(run('coffeeState().level'),50);
+ v.completion[0].done=true;assert.equal(run('coffeeState().level'),38);
+ v.completion[1].done=true;assert.equal(run('coffeeState().level'),25);
+ v.demonLocked=true;v.completion=[{done:true}];assert.equal(run('coffeeState().level'),10);
+ v.phase='review';assert.equal(run('coffeeState().level'),5);
+ v.phase='day';v.trialDone=false;v.nominations={};assert.equal(run('coffeeState().level'),100);
+});
+test('public and player coffee cannot expose role names, lock-ins, or demon subphases',()=>{
+ const {c,run}=client();const v={players:[{id:'secret',alive:true,role:'Analyst'}],me:{gm:true},completion:[{player:'secret',name:'HiddenName',kind:'role',done:false}],phase:'night',round:1};c.v=v;run('state=v;publicMode=true');const before=run('coffeeTracker()');assert.ok(!before.includes('HiddenName'));assert.ok(!before.includes('Succubus'));assert.ok(!before.includes('Analyst'));v.demonLocked=true;v.completion[0].done=true;assert.equal(run('coffeeTracker()'),before);
+ run('publicMode=false;state.me.gm=false');assert.equal(run('coffeeTracker()'),before);run('state.me.gm=true');assert.match(run('coffeeTracker()'),/HiddenName/);assert.match(run('coffeeTracker()'),/Succubus inquiry/);
+});
+test('tracker is additive above ledger, chat, notice board, and action controls',()=>{
+ const {c,app,run}=client();const r=newRoom('OFFICE','Darius','secret-code'),gm=r.players[0];perform(r,gm,'claimGM',{secret:'secret-code'});for(let i=0;i<15;i++)addPlayer(r,'P'+i);perform(r,gm,'start');
+ for(const p of [gm,r.players.find(p=>p.role==='doctor'),r.players.find(p=>p.role==='auditor')]){
+  c.v=view(r,p);run('state=v;publicMode=false;code="OFFICE";render()');assert.ok(app.innerHTML.indexOf('coffee-tracker')<app.innerHTML.indexOf('PARTY NIGHT LOG'));assert.match(app.innerHTML,/id="chatForm"/);assert.match(app.innerHTML,/OFFICE NOTICE BOARD/);assert.match(app.innerHTML,/GAME MASTER CONTROL DESK|YOUR DESK/);assert.match(app.innerHTML,/status-sheet/);
+ }
+});

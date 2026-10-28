@@ -1,3 +1,11 @@
+## v1.4.0 · OVERTIME coffee cycle tracker
+
+A compact 1980s coffee dispenser now sits above the existing player/voting ledger. All chats, role dashboards, notices, GM controls and the detached chat remain in place.
+
+The pot refills when the GM publishes the morning report and opens a new day. Public nominations and verdicts drain the day portion; night processing drains the rest. The GM sees required lock-ins and skips reflected in the coffee level and a private checklist. Public/player night levels remain fixed until the morning review to conceal secret submission counts and role windows. The tracker never advances phases, modifies votes, or bypasses mandatory decisions. Timers still use the existing GM controls.
+
+Open `OFFLINE_DEMO.html` directly in a browser to try the updated full game without Node.js.
+
 # Drafters vs Workload Demons — party ledger, role dashboards + offline sandbox v1.3.1
 
 A browser deduction game for 30 players plus one human Game Master. English only, with a retro drafting-office interface, private rooms, live text chats, secret role actions, and text announcements. Desktop first; a narrow layout is included, but phone usability still needs testing.
